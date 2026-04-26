@@ -20,12 +20,12 @@ export class HolographicMemoryField {
   readonly firstMoment: Float32Array; // [dim] — Σ w_i v_i
   readonly secondMoment: Float32Array; // [dim * dim] — Σ w_i v_i v_i^T (row-major)
   readonly docWeights: Float32Array; // [numDocs] — weights per doc
-  private totalWeight: number;
+  totalWeight: number;
 
   // === EPISTEMIC TRACKING ===
   readonly coherenceHistory: Float32Array; // [historyDepth]
   readonly entropyHistory: Float32Array; // [historyDepth]
-  private historyCursor: number;
+  historyCursor: number;
 
   // === PRE-ALLOCATED WORKSPACE ===
   readonly recon: Float32Array; // [dim] — reconstructed vector

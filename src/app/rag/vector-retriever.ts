@@ -234,10 +234,13 @@ export class RandomProjectionLSH {
     }
 
     const tks = new TopKSelector(maxCandidates);
+    const seen = new Set<number>();
+    
     for (let d = 0; d < this.numDocs; d++) {
       const hamming = popcount32(qSig ^ this.signatures[d]!);
-      if (hamming <= threshold) {
+      if (hamming <= threshold && !seen.has(d)) {
         tks.offer(d, -hamming);
+        seen.add(d);
       }
     }
     
@@ -287,7 +290,7 @@ export class HybridVectorRetriever {
       this.candidateBuffer,
       this.numDocs,
     );
-    const useAll = numCandidates < this.k * 2;
+    const useAll = numCandidates < this.k * 2 || numCandidates === 0;
 
     let qNorm = 0;
     for (let j = 0; j < this.dim; j++) qNorm += query[j]! * query[j]!;

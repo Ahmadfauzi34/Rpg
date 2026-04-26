@@ -49,13 +49,20 @@ export class ChunkStore {
     const tx = this.db.transaction(this.config.storeName, 'readwrite');
     const store = tx.objectStore(this.config.storeName);
     
+    interface SerializableChunk {
+      id: string;
+      docId: string;
+      text: string;
+      termFreq: Record<string, number>;
+      modifiedAt: number;
+    }
+    
     for (const chunk of chunks) {
-      const serializable = {
+      const serializable: SerializableChunk = {
         ...chunk,
         termFreq: Object.fromEntries(chunk.termFreq)
       };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      store.put(serializable as any);
+      store.put(serializable);
     }
     
     return new Promise((resolve, reject) => {

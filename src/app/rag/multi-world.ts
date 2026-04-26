@@ -97,13 +97,15 @@ export class MultiWorldHologram {
     dst.firstMoment.set(src.firstMoment);
     dst.secondMoment.set(src.secondMoment);
     dst.docWeights.set(src.docWeights);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (dst as any).totalWeight = (src as any).totalWeight;
+    
+    let tw = 0;
+    // eslint-disable-next-line @typescript-eslint/prefer-for-of
+    for (let i = 0; i < dst.docWeights.length; i++) tw += dst.docWeights[i]!;
+    dst.totalWeight = tw;
     
     dst.coherenceHistory.set(src.coherenceHistory);
     dst.entropyHistory.set(src.entropyHistory);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (dst as any).historyCursor = (src as any).historyCursor;
+    dst.historyCursor = src.historyCursor;
     
     this.active[targetWorld] = 1;
     this.superposition[targetWorld] = this.superposition[sourceWorld]! * 0.95; // slightly less real
@@ -124,12 +126,10 @@ export class MultiWorldHologram {
     w.firstMoment.fill(0);
     w.secondMoment.fill(0);
     w.docWeights.fill(0);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (w as any).totalWeight = 0;
+    w.totalWeight = 0;
     w.coherenceHistory.fill(0);
     w.entropyHistory.fill(0);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (w as any).historyCursor = 0;
+    w.historyCursor = 0;
     
     this.active[world] = 0;
     this.superposition[world] = 0;
@@ -154,8 +154,9 @@ export class MultiWorldHologram {
     const n = this.numDocs;
     for (let d = 0; d < n; d++) {
       if (branch.docWeights[d]! > 0) {
-        const newW = Math.max(trunk.docWeights[d]!, branch.docWeights[d]! * weight);
-        trunk.docWeights[d] = newW;
+        const branchW = branch.docWeights[d]! * weight;
+        const trunkW = trunk.docWeights[d]!;
+        trunk.docWeights[d] = trunkW + branchW;
       }
     }
     

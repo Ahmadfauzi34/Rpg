@@ -245,11 +245,13 @@ export class WorldMergeResolver {
    */
   private _docCoherence(docId: number, world: HolographicMemoryField, out: Float32Array): number {
     const vec = this._getDocVector(docId);
+    const invTotal = world.totalWeight > 1e-10 ? 1.0 / world.totalWeight : 0;
     let dot = 0, norm1 = 0, norm2 = 0;
     for(let i=0; i<this.dim; i++) {
-      dot += vec[i]! * world.firstMoment[i]!;
+      const mu = world.firstMoment[i]! * invTotal;
+      dot += vec[i]! * mu;
       norm1 += vec[i]! * vec[i]!;
-      norm2 += world.firstMoment[i]! * world.firstMoment[i]!;
+      norm2 += mu * mu;
     }
     const denom = Math.sqrt(norm1 * norm2);
     // Kita isi out dengan vec agar pipeline selanjutnya seperti _weightedMergeVectors tetap memiliki input valid.

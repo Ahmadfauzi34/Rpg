@@ -453,8 +453,7 @@ export class LoreEngineService {
     baseWeight = 1.0,
   ): Promise<void> {
     const chunks = this._chunk(key, content);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const meta: Record<string, any> = { timestamp: Date.now() };
+    const meta: Record<string, string | number | boolean> = { timestamp: Date.now() };
     for (const t of tags) meta[`tag_${t}`] = 1;
     meta[`location_${key}`] = 1;
     meta[`entity_${key}`] = 1;
@@ -486,7 +485,32 @@ export class LoreEngineService {
             break;
           }
         }
-        if (numericId === undefined) numericId = 0; // last resort fallback
+        if (numericId === undefined) {
+          let minWeight = Infinity;
+          let victimId = -1;
+          let victimKey = '';
+          const world = this.multiWorld?.worlds[0];
+          
+          if (world) {
+            for (const [vKey, vId] of this.docIdMap) {
+              const w = world.docWeights[vId] || 0;
+              if (w < minWeight) {
+                minWeight = w;
+                victimId = vId;
+                victimKey = vKey;
+              }
+            }
+          }
+          
+          if (victimKey && victimId !== -1) {
+            numericId = victimId;
+            this.docIdMap.delete(victimKey);
+            const qIdx = this.docIdEvictQueue.indexOf(victimKey);
+            if (qIdx >= 0) this.docIdEvictQueue.splice(qIdx, 1);
+          } else {
+            numericId = 0; // absolute fallback if map is empty
+          }
+        }
 
         const dOff = numericId * this.dim;
         const oldVec = new Float32Array(this.dim);

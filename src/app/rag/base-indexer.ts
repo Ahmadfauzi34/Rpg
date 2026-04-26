@@ -236,6 +236,7 @@ export class BaseIndexer {
 
   private _selectCandidates(fieldScores: Map<string, number>, bm25Scores: Float64Array, limit: number): string[] {
     const set = new Set<string>();
+    // Field scores -> resolve from Doc IDs to Chunk IDs
     const sortedFields = Array.from(fieldScores.entries()).sort((a, b) => b[1] - a[1]).slice(0, limit);
     for (const [docId] of sortedFields) {
       const header = this.headers.get(docId);
@@ -243,8 +244,9 @@ export class BaseIndexer {
         for (const cid of header.chunkIds) set.add(cid);
       }
     }
-    const docIds = this.inverted.getDocIds();
-    const bm25WithId = docIds.map((id, i) => ({id, score: bm25Scores[i]}))
+    // inverted index doc IDs are naturally Chunk IDs
+    const chunkIds = this.inverted.getDocIds();
+    const bm25WithId = chunkIds.map((id, i) => ({id, score: bm25Scores[i]}))
       .filter(x => x.score > 0).sort((a, b) => b.score - a.score).slice(0, limit);
     for (const {id} of bm25WithId) set.add(id);
     return Array.from(set).slice(0, limit);
