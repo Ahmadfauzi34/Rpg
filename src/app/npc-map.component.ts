@@ -19,7 +19,7 @@ import {MatIconModule} from '@angular/material/icon';
             <span class="text-[9px] text-emerald-500 font-mono tracking-widest uppercase mt-1">Live Satellite Link</span>
           </div>
         </div>
-        <button (click)="closeMap.emit()" class="p-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors border border-zinc-700/50 flex items-center justify-center">
+        <button (click)="closeMap.emit()" aria-label="Close map" class="p-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors border border-zinc-700/50 flex items-center justify-center">
           <mat-icon class="text-[20px] w-[20px] h-[20px]">close</mat-icon>
         </button>
       </div>
