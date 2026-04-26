@@ -159,8 +159,10 @@ export class ExactSimilarityKernel {
         for (let d = 0; d < this.numDocs; d++) {
           selector.offer(d, this.scoreBatch.data[rowOff + d]!);
         }
-        outIndices[qIdx] = new Int32Array(selector.indices.slice(0, k));
-        outScores[qIdx] = new Float32Array(selector.scores.slice(0, k));
+        if (!outIndices[qIdx]) outIndices[qIdx] = new Int32Array(k);
+        if (!outScores[qIdx]) outScores[qIdx] = new Float32Array(k);
+        outIndices[qIdx]!.set(selector.indices.subarray(0, k));
+        outScores[qIdx]!.set(selector.scores.subarray(0, k));
       }
     }
   }

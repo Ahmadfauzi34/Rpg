@@ -630,6 +630,32 @@ export class LoreEngineService {
        }
     }
 
+    // Pass 4: Sort each term's postings by document ID to ensure correct WAND operation
+    for (let t = 0; t < numTerms; t++) {
+      const start = invLists.rowPtr[t]!;
+      const end = invLists.rowPtr[t + 1]!;
+      const length = end - start;
+      if (length > 1) {
+        // Create an array of indices to sort
+        const indices = new Int32Array(length);
+        for (let i = 0; i < length; i++) indices[i] = start + i;
+
+        indices.sort((a, b) => invLists.colIdx[a]! - invLists.colIdx[b]!);
+
+        // Reorder colIdx and values according to the sorted indices
+        const sortedColIdx = new Int32Array(length);
+        const sortedValues = new Float32Array(length);
+        for (let i = 0; i < length; i++) {
+          sortedColIdx[i] = invLists.colIdx[indices[i]!]!;
+          sortedValues[i] = invLists.values[indices[i]!]!;
+        }
+        for (let i = 0; i < length; i++) {
+          invLists.colIdx[start + i] = sortedColIdx[i]!;
+          invLists.values[start + i] = sortedValues[i]!;
+        }
+      }
+    }
+
     return invLists;
   }
 
