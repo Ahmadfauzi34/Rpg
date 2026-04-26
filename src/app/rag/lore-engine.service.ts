@@ -167,9 +167,9 @@ export class LoreEngineService {
         32,
       );
 
-      const invLists = new HybridCSRMatrix(2048, this.maxDocs, 0); // placeholder for now
-      const termUB = new Float32Array(2048);
-      const cooccur = new HybridCSRMatrix(2048, 2048, 0); // placeholder
+      const invLists = this._buildInvListsFromIndexer();
+      const termUB = this._computeTermUpperBounds(invLists);
+      const cooccur = new HybridCSRMatrix(2048, 2048, 0); // Placeholder unless implemented
       pipeline.build(invLists, termUB, cooccur, this.docFHRR);
 
       this.epistemicKernel = new EpistemicRetrievalKernel(
@@ -403,6 +403,8 @@ export class LoreEngineService {
           `[${entity}] ${fact}`,
           ["knowledge_graph", entity],
           w,
+          undefined,
+          entity
         );
       }
     }
@@ -446,9 +448,13 @@ export class LoreEngineService {
       }
 
       if (fullNarrative.trim().length > `[Episode ${i}]`.length) {
-        await this._indexEntry(key, fullNarrative.trim(), tags, 0.8);
+        const location = ep.mc_state?.locationName || ep.mc_state?.location;
+        await this._indexEntry(key, fullNarrative.trim(), tags, 0.8, location);
       }
       this.lastIndexedEpisode = i;
+      if (typeof window !== 'undefined' && i % 10 === 0) {
+        await new Promise(r => requestAnimationFrame(r));
+      }
     }
 
     // Index important background logs
@@ -499,12 +505,14 @@ export class LoreEngineService {
     content: string,
     tags: string[],
     baseWeight = 1.0,
+    location?: string,
+    entity?: string,
   ): Promise<void> {
     const chunks = this._chunk(key, content);
     const meta: Record<string, string | number | boolean> = { timestamp: Date.now() };
     for (const t of tags) meta[`tag_${t}`] = true;
-    meta[`location_${key}`] = true;
-    meta[`entity_${key}`] = true;
+    if (location) meta[`location_${location}`] = true;
+    if (entity) meta[`entity_${entity}`] = true;
 
     this.indexer.indexDocument(
       {
@@ -541,11 +549,13 @@ export class LoreEngineService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private _chunk(docId: string, text: string): any[] {
     if (text.length <= 512) {
+      const words = text.toLowerCase().match(/\b\w+\b/g) || [];
       return [
         {
           id: `${docId}_c0`,
           docId,
           text,
+          tokenCount: words.length,
           termFreq: this._tf(text),
           modifiedAt: Date.now(),
         },
@@ -569,6 +579,58 @@ export class LoreEngineService {
       });
     }
     return out;
+  }
+
+  private _computeTermUpperBounds(invLists: HybridCSRMatrix): Float32Array {
+    const termUB = new Float32Array(invLists.rows);
+    for (let t = 0; t < invLists.rows; t++) {
+      const start = invLists.rowPtr[t]!;
+      const end = invLists.rowPtr[t + 1]!;
+      let maxTf = 0;
+      for (let p = start; p < end; p++) {
+        const val = invLists.values[p]!;
+        if (val > maxTf) maxTf = val;
+      }
+      termUB[t] = maxTf;
+    }
+    return termUB;
+  }
+
+  private _buildInvListsFromIndexer(): HybridCSRMatrix {
+    const numTerms = 2048;
+    let totalNNZ = 0;
+
+    // Pass 1: count NNZ
+    const termCounts = new Int32Array(numTerms);
+    for (const [term, postings] of this.indexer.inverted.termPostings.entries()) {
+       const termId = this._hashTerm(term) % numTerms;
+       termCounts[termId] += postings.length;
+       totalNNZ += postings.length;
+    }
+
+    const invLists = new HybridCSRMatrix(numTerms, this.maxDocs, totalNNZ);
+
+    // Pass 2: populate rowPtr
+    invLists.rowPtr[0] = 0;
+    for (let i = 0; i < numTerms; i++) {
+       invLists.rowPtr[i + 1] = invLists.rowPtr[i]! + termCounts[i]!;
+    }
+
+    // Pass 3: fill colIdx and values
+    const currentOffsets = new Int32Array(invLists.rowPtr);
+    for (const [term, postings] of this.indexer.inverted.termPostings.entries()) {
+       const termId = this._hashTerm(term) % numTerms;
+       for (const p of postings) {
+          const docNum = this.docIdMap.get(p.docId) ?? -1;
+          if (docNum >= 0) {
+             const ptr = currentOffsets[termId]!++;
+             invLists.colIdx[ptr] = docNum;
+             invLists.values[ptr] = p.tf;
+          }
+       }
+    }
+
+    return invLists;
   }
 
   private _tf(text: string): Map<string, number> {

@@ -6,6 +6,7 @@ export interface IndexedChunk {
   docId: string;
   text: string;
   termFreq: Map<string, number>;
+  tokenCount?: number;
   modifiedAt: number;
 }
 
@@ -39,7 +40,7 @@ export interface ScoredChunk {
 }
 
 export class InvertedIndex {
-  private termPostings = new Map<string, {docId: string; tf: number}[]>();
+  public termPostings = new Map<string, {docId: string; tf: number}[]>();
   private docFreq = new Map<string, number>();
   private totalDocs = 0;
   private scoreAcc: Float64Array;
@@ -66,7 +67,7 @@ export class InvertedIndex {
     this.idxToDocId.push(chunk.id);
     this.totalDocs++;
 
-    let chunkLength = chunk.termFreq.size;
+    const chunkLength = chunk.tokenCount || chunk.termFreq.size;
     for (const [term, tf] of chunk.termFreq) {
       let postings = this.termPostings.get(term);
       if (!postings) {

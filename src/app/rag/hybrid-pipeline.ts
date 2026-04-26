@@ -250,6 +250,7 @@ export class RetrievalPipeline {
       let pivotPos = -1;
       for (let i = 0; i < nq; i++) {
         const t = qTerms[wandOrder[i]!]!;
+        if (t < 0 || t >= this.numTerms) continue;
         sumUB += termUB[t]! * qIDF[wandOrder[i]!]!;
         if (sumUB > threshold) {
           pivotPos = i;
@@ -274,6 +275,7 @@ export class RetrievalPipeline {
         let score = 0;
         for (let i = 0; i < nq; i++) {
           const t = qTerms[i]!;
+          if (t < 0 || t >= this.numTerms) continue;
           const end = invLists.rowPtr[t + 1]!;
           let p = wandCursors[i]!;
           for (; p < end && invLists.colIdx[p]! < pivotDoc; p++) {
