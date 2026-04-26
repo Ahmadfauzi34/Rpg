@@ -36,8 +36,55 @@ export class LoreEngineService {
   private readonly dim = 128;
   private docFHRR!: Float32Array;
   private docIdMap = new Map<string, number>();
-  private docIdEvictQueue: string[] = [];
   private nextDocId = 0;
+  private zeroVec!: Float32Array;
+
+  private _getOrAllocDocId(key: string): number {
+    let id = this.docIdMap.get(key);
+    if (id !== undefined) return id;
+
+    if (this.nextDocId < this.maxDocs) {
+      id = this.nextDocId++;
+    } else {
+      // Eviction
+      id = this._evictOne();
+    }
+    this.docIdMap.set(key, id);
+    return id;
+  }
+
+  private _evictOne(): number {
+    let minScore = Infinity;
+    let victim = -1;
+    const world = this.multiWorld?.worlds[0];
+
+    if (world) {
+      for (const [, id] of this.docIdMap) {
+        const w = world.docWeights[id] || 0;
+        const s = world.salience[id] || 1;
+        const score = w * s;
+        if (score < minScore) {
+          minScore = score;
+          victim = id;
+        }
+      }
+    }
+
+    if (victim === -1) victim = 0;
+
+    for (const [k, id] of this.docIdMap) {
+      if (id === victim) {
+        this.docIdMap.delete(k);
+        break;
+      }
+    }
+
+    if (world) {
+      world.encode(victim, this.zeroVec, 0);
+    }
+
+    return victim;
+  }
 
   // Pre-allocated buffers for retrieval
   private queryRecon!: Float32Array;
@@ -88,13 +135,14 @@ export class LoreEngineService {
         type: "categorical",
         weight: 0.4,
       });
-      this.indexer.registerSchema({ name: "tag", type: "tag", weight: 0.2 });
+      this.indexer.registerSchema({ name: "tag", type: "categorical", weight: 0.2 });
       this.indexer.registerSchema({
         name: "timestamp",
         type: "temporal",
         weight: 0.05,
       });
 
+      this.zeroVec = new Float32Array(this.dim);
       this.docFHRR = new Float32Array(this.maxDocs * this.dim);
       this.multiWorld = new MultiWorldHologram(
         3,
@@ -180,15 +228,15 @@ export class LoreEngineService {
     };
 
     if (location) {
-      query.filters[`location_${location}`] = 1;
+      query.filters[`location_${location}`] = true;
       query.fieldBoost[`location_${location}`] = 0.35;
     }
     for (const e of entities) {
-      query.filters[`entity_${e}`] = 1;
+      query.filters[`entity_${e}`] = true;
       query.fieldBoost[`entity_${e}`] = 0.4;
     }
     for (const t of tags) {
-      query.filters[`tag_${t}`] = 1;
+      query.filters[`tag_${t}`] = true;
       query.fieldBoost[`tag_${t}`] = 0.2;
     }
 
@@ -454,9 +502,9 @@ export class LoreEngineService {
   ): Promise<void> {
     const chunks = this._chunk(key, content);
     const meta: Record<string, string | number | boolean> = { timestamp: Date.now() };
-    for (const t of tags) meta[`tag_${t}`] = 1;
-    meta[`location_${key}`] = 1;
-    meta[`entity_${key}`] = 1;
+    for (const t of tags) meta[`tag_${t}`] = true;
+    meta[`location_${key}`] = true;
+    meta[`entity_${key}`] = true;
 
     this.indexer.indexDocument(
       {
@@ -470,60 +518,7 @@ export class LoreEngineService {
     );
 
     // Embed to RAG Holographic Kernel
-    let numericId = this.docIdMap.get(key);
-    if (numericId === undefined) {
-      if (this.nextDocId < this.maxDocs) {
-        numericId = this.nextDocId++;
-        this.docIdEvictQueue.push(key);
-      } else {
-        while (this.docIdEvictQueue.length > 0) {
-          const evictedKey = this.docIdEvictQueue.shift()!;
-          const possibleId = this.docIdMap.get(evictedKey);
-          if (possibleId !== undefined) {
-            numericId = possibleId;
-            this.docIdMap.delete(evictedKey);
-            break;
-          }
-        }
-        if (numericId === undefined) {
-          let minWeight = Infinity;
-          let victimId = -1;
-          let victimKey = '';
-          const world = this.multiWorld?.worlds[0];
-          
-          if (world) {
-            for (const [vKey, vId] of this.docIdMap) {
-              const w = world.docWeights[vId] || 0;
-              if (w < minWeight) {
-                minWeight = w;
-                victimId = vId;
-                victimKey = vKey;
-              }
-            }
-          }
-          
-          if (victimKey && victimId !== -1) {
-            numericId = victimId;
-            this.docIdMap.delete(victimKey);
-            const qIdx = this.docIdEvictQueue.indexOf(victimKey);
-            if (qIdx >= 0) this.docIdEvictQueue.splice(qIdx, 1);
-          } else {
-            numericId = 0; // absolute fallback if map is empty
-          }
-        }
-
-        const dOff = numericId * this.dim;
-        const oldVec = new Float32Array(this.dim);
-        for (let i = 0; i < this.dim; i++) {
-          oldVec[i] = this.docFHRR[dOff + i]!;
-        }
-        if (this.multiWorld && this.multiWorld.worlds[0]) {
-          this.multiWorld.worlds[0].encode(numericId, oldVec, 0);
-        }
-        this.docIdEvictQueue.push(key);
-      }
-      this.docIdMap.set(key, numericId);
-    }
+    const numericId = this._getOrAllocDocId(key);
 
     if (numericId !== undefined) {
       const vec = this._textToVector(content, this.dim);
@@ -605,14 +600,11 @@ export class LoreEngineService {
 
   private _textToVector(text: string, dim: number): Float32Array {
     const vec = new Float32Array(dim);
-    let seed = 0x12345678;
     for (let i = 0; i < text.length; i++) {
-        seed ^= text.charCodeAt(i);
-        seed ^= seed << 13;
-        seed ^= seed >>> 17;
-        seed ^= seed << 5;
-        const hash = (seed >>> 0) / 0xFFFFFFFF; // [0, 1]
-        vec[i % dim] += hash - 0.5;
+        let h = text.charCodeAt(i) * 2654435761;
+        h = (h ^ (h >>> 16)) >>> 0;
+        const idx = i % dim;
+        vec[idx] += ((h / 0xFFFFFFFF) - 0.5);
     }
     let norm = 0;
     for (let i = 0; i < dim; i++) norm += vec[i]! * vec[i]!;

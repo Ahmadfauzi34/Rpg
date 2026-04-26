@@ -231,7 +231,7 @@ export class HolographicMemoryField {
     // Gunakan pre-allocated array (tempScores) max `numDocs`
     let sortedScores: Float32Array;
     if (count <= this.numDocs) {
-      sortedScores = this.tempScores.subarray(0, count);
+      sortedScores = this.tempScores.slice(0, count);
     } else {
       sortedScores = new Float32Array(count); // Fallback
     }

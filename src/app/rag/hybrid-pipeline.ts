@@ -60,10 +60,12 @@ function topkInsert(
 
 function topkReset(
   k: number,
+  indices: Int32Array,
   scores: Float32Array,
   minRef: { v: number },
 ): void {
   scores.fill(-Infinity);
+  indices.fill(-1);
   minRef.v = -Infinity;
 }
 
@@ -212,7 +214,7 @@ export class RetrievalPipeline {
     qIDF: Float32Array,
     nq: number,
   ): number {
-    topkReset(this.kBm25, this.bm25Scr, this.bm25Min);
+    topkReset(this.kBm25, this.bm25Idx, this.bm25Scr, this.bm25Min);
     const { invLists, termUB, wandCursors, wandDocIDs, wandOrder } = this;
     const k = this.kBm25;
     let threshold = 0;
@@ -402,7 +404,7 @@ export class RetrievalPipeline {
     numCandidates: number,
     queryFHRR: Float32Array,
   ): void {
-    topkReset(this.kBm25, this.simScr, this.simMin);
+    topkReset(this.kBm25, this.simIdx, this.simScr, this.simMin);
     this.queryHash.fill(0);
     for (let b = 0; b < this.numBits; b++) {
       let dot = 0;
@@ -451,7 +453,7 @@ export class RetrievalPipeline {
     wBm25: number,
     wSim: number,
   ): void {
-    topkReset(this.kFinal, this.finalScr, this.finalMin);
+    topkReset(this.kFinal, this.finalIdx, this.finalScr, this.finalMin);
     this.candMask.fill(0);
 
     let maxBm25 = 0;
