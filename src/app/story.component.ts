@@ -159,6 +159,7 @@ import {MatIconModule} from '@angular/material/icon';
             <button 
               [disabled]="!customAction.value?.trim() || engine.isProcessing()"
               (click)="submitCustomAction()"
+              aria-label="Submit action"
               class="bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white px-3.5 py-2 rounded-lg transition-colors flex items-center justify-center">
               <mat-icon class="text-[20px] w-[20px] h-[20px]">send</mat-icon>
             </button>
