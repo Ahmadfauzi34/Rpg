@@ -66,7 +66,7 @@ export class InvertedIndex {
     this.idxToDocId.push(chunk.id);
     this.totalDocs++;
 
-    let chunkLength = 0;
+    let chunkLength = chunk.termFreq.size;
     for (const [term, tf] of chunk.termFreq) {
       let postings = this.termPostings.get(term);
       if (!postings) {
@@ -76,7 +76,6 @@ export class InvertedIndex {
       }
       postings.push({docId: chunk.id, tf});
       this.docFreq.set(term, (this.docFreq.get(term) || 0) + 1);
-      chunkLength += tf;
     }
     this.docLengths[idx] += chunkLength;
   }

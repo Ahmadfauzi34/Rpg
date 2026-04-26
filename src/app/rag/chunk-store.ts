@@ -57,17 +57,21 @@ export class ChunkStore {
       modifiedAt: number;
     }
     
-    for (const chunk of chunks) {
-      const serializable: SerializableChunk = {
-        ...chunk,
-        termFreq: Object.fromEntries(chunk.termFreq)
-      };
-      store.put(serializable);
-    }
-    
     return new Promise((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(new Error('Transaction aborted'));
+
+      for (const chunk of chunks) {
+        const serializable: SerializableChunk = {
+          ...chunk,
+          termFreq: Object.fromEntries(chunk.termFreq)
+        };
+        const req = store.put(serializable);
+        req.onerror = () => {
+          tx.abort();
+        };
+      }
     });
   }
 
