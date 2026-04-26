@@ -25,7 +25,8 @@ export class TopologicalSyncSystem {
     incomingAIState: NpcState[],
   ): { resolvedState: Record<string, NpcState>; anomalies: AnomalyReport[] } {
     // Helper untuk normalisasi nama
-    const escapeRegex = (str: string) => str.replace(/[_]/g, " ").toLowerCase();
+    const normalizeName = (str: string) => str.replace(/[_]/g, " ").toLowerCase();
+    const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     // 1. Merge terlebih dahulu (simulasikan update state)
     const mergedState: Record<string, NpcState> = JSON.parse(
@@ -35,10 +36,10 @@ export class TopologicalSyncSystem {
     for (const incoming of incomingAIState) {
       if (incoming && incoming.nama) {
         // Find existing key
-        const normalizedIncoming = escapeRegex(incoming.nama);
+        const normalizedIncoming = normalizeName(incoming.nama);
         let existingKey = incoming.nama;
         for (const key of Object.keys(mergedState)) {
-          if (escapeRegex(key) === normalizedIncoming) {
+          if (normalizeName(key) === normalizedIncoming) {
             existingKey = key;
             break;
           }
@@ -49,59 +50,52 @@ export class TopologicalSyncSystem {
     }
 
     const anomalies: AnomalyReport[] = [];
-    const names = Object.keys(mergedState);
+    const npcList = Object.values(mergedState);
 
-    // Helper untuk normalisasi nama (Raja_Aldric -> raja aldric)
-    const normalizeName = (name: string) =>
-      name.replace(/_/g, " ").toLowerCase();
+    // 2. Pre-compute and index
+    // Create an index of normalized names and compiled Regexes to avoid O(N^2) recompilation
+    interface NpcIndex {
+      npc: NpcState;
+      loc: string;
+      matcher: RegExp;
+    }
 
-    // 2. Deteksi Anomali
-    // Jika Aktivitas NPC A mengandung nama NPC B,
-    // Maka Lokasi NPC A HARUS sama dengan Lokasi NPC B
-    for (let i = 0; i < names.length; i++) {
-      const npcA = mergedState[names[i]];
+    const index: NpcIndex[] = npcList.map(npc => {
+      const normalizedName = normalizeName(npc.nama);
+      const escapedName = escapeRegex(normalizedName);
+      return {
+        npc,
+        loc: (npc.lokasi || npc.location || "").toLowerCase().trim(),
+        matcher: new RegExp(`(?:^|\\W)${escapedName}(?:\\W|$)`)
+      };
+    });
+
+    // 3. Deteksi Anomali - O(N * M) but optimized
+    for (const dataA of index) {
+      const npcA = dataA.npc;
       if (!npcA.aktivitas && !npcA.activity) continue;
 
-      const rawActA = npcA.aktivitas || npcA.activity || "";
-      const actA = rawActA.toLowerCase().replace(/_/g, " ");
+      const actA = (npcA.aktivitas || npcA.activity || "").toLowerCase().replace(/_/g, " ");
 
-      for (let j = 0; j < names.length; j++) {
-        if (i === j) continue;
+      for (const dataB of index) {
+        if (dataA.npc === dataB.npc) continue;
 
-        const nameB = names[j];
-        const npcB = mergedState[nameB];
-
-        const normalizedNameB = normalizeName(nameB);
-        const escapedName = normalizedNameB.replace(
-          /[.*+?^${}()|[\]\\]/g,
-          "\\$&",
-        );
-
-        // Cek apakah aktivitas A me-mention B
-        const nameRegex = new RegExp(`(?:^|\\W)${escapedName}(?:\\W|$)`);
-
-        if (nameRegex.test(actA)) {
+        if (dataB.matcher.test(actA)) {
           // A menyebut B dalam aktivitasnya
-          const locA = (npcA.lokasi || npcA.location || "").toLowerCase().trim();
-          const locB = (npcB.lokasi || npcB.location || "").toLowerCase().trim();
+          const locA = dataA.loc;
+          const locB = dataB.loc;
 
           const isLocationCompatible =
-            locA === locB ||
-            locA === "unknown" ||
-            locB === "unknown" ||
-            !locA ||
-            !locB;
+            locA === locB || locA === "unknown" || locB === "unknown" || !locA || !locB;
 
           if (!isLocationCompatible && locA && locB) {
             anomalies.push({
               npcA: npcA.nama,
-              npcB: npcB.nama,
-              reason: `${npcA.nama} beraktivitas melibatkan ${npcB.nama} di [${locA}], tapi ${npcB.nama} berada di [${locB}].`,
+              npcB: dataB.npc.nama,
+              reason: `${npcA.nama} beraktivitas melibatkan ${dataB.npc.nama} di [${locA}], tapi ${dataB.npc.nama} berada di [${locB}].`,
             });
 
             // AUTO-CORRECT: Putuskan joint.
-            // Karena aktivitas A me-mention B tapi B tidak ada di sana,
-            // Kita asumsikan relasi ini basi/stale.
             npcA.aktivitas = "Berada sendirian setelah ditinggalkan.";
             npcA.activity = "Berada sendirian setelah ditinggalkan.";
             npcA.mood = "Bertanya-tanya / Netral";
