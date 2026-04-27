@@ -38,7 +38,7 @@ export function popcount32(x: number): number {
 }
 
 // === INLINE TOP-K (Zero-allocation, pre-allocated slots) ===
-function topkInsert(
+export function topkInsert(
   k: number,
   indices: Int32Array,
   scores: Float32Array,
@@ -58,7 +58,7 @@ function topkInsert(
   minScoreRef.v = scores[k - 1]!;
 }
 
-function topkReset(
+export function topkReset(
   k: number,
   indices: Int32Array,
   scores: Float32Array,
