@@ -28,3 +28,8 @@
 ## 2026-04-26 - [⬡ Carbo] - [Graph-based topological checks]
 **Vision:** Instead of regex string parsing, we should extract the "relations" directly from the AI response into a Graph and execute graph algorithms (connected components) to assert locational validity.
 **Blockers:** Requires rewriting the AI output schema to explicitly emit relationship edges. Too big for this PR.
+
+## 2026-04-27 - [⬡ Carbo] - [True O(N) Topological Sync via Single-Pass Regex]
+**Context:** Bolt ⚡ highlighted that the previous topological sync still suffered from O(N^2) inner loops and dynamic inner regex tests.
+**Decision:** Fully eliminated the N^2 relational loops. Replaced with an O(1) Map lookup for NPCs and a globally compiled Regex mapping to extract all mentioned entity names from an activity string in a single linear pass `while(masterRegex.exec())`.
+**Consequences:** Topological sync is now mathematically O(N * length of activity), completely unblocking large populations (N>100) from crippling the CPU frame budget. Memory footprint is marginal (a hash map + regex).

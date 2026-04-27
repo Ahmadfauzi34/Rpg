@@ -53,38 +53,57 @@ export class TopologicalSyncSystem {
     const npcList = Object.values(mergedState);
 
     // 2. Pre-compute and index
-    // Create an index of normalized names and compiled Regexes to avoid O(N^2) recompilation
-    interface NpcIndex {
-      npc: NpcState;
-      loc: string;
-      matcher: RegExp;
+    // Create a dictionary of normalized names to locations for O(1) lookups
+    const npcMap = new Map<string, { npc: NpcState; loc: string }>();
+    const namesList: string[] = [];
+
+    for (const npc of npcList) {
+      if (!npc.nama) continue;
+      const normalizedName = normalizeName(npc.nama);
+      npcMap.set(normalizedName, {
+        npc,
+        loc: (npc.lokasi || npc.location || "").toLowerCase().trim()
+      });
+      namesList.push(normalizedName);
     }
 
-    const index: NpcIndex[] = npcList.map(npc => {
-      const normalizedName = normalizeName(npc.nama);
-      const escapedName = escapeRegex(normalizedName);
-      return {
-        npc,
-        loc: (npc.lokasi || npc.location || "").toLowerCase().trim(),
-        matcher: new RegExp(`(?:^|\\W)${escapedName}(?:\\W|$)`)
-      };
-    });
+    // Sort names by length descending to match longest names first (e.g., "Budi Santoso" before "Budi")
+    namesList.sort((a, b) => b.length - a.length);
+    const escapedNames = namesList.map(escapeRegex);
 
-    // 3. Deteksi Anomali - O(N * M) but optimized
-    for (const dataA of index) {
-      const npcA = dataA.npc;
+    // Master Regex to extract all mentioned names in a single pass
+    // Use lookahead for trailing boundary so we don't consume characters that might start the next word
+    const masterRegex = new RegExp(`(?:^|\\W)(${escapedNames.join('|')})(?=\\W|$)`, 'gi');
+
+    // 3. Deteksi Anomali - O(N) where N is number of NPCs
+    for (const npcA of npcList) {
       if (!npcA.aktivitas && !npcA.activity) continue;
 
       const actA = (npcA.aktivitas || npcA.activity || "").toLowerCase().replace(/_/g, " ");
+      const normalizedNpcAName = normalizeName(npcA.nama);
 
-      for (const dataB of index) {
-        if (dataA.npc === dataB.npc) continue;
+      const locA = (npcA.lokasi || npcA.location || "").toLowerCase().trim();
 
-        if (dataB.matcher.test(actA)) {
-          // A menyebut B dalam aktivitasnya
-          const locA = dataA.loc;
+      masterRegex.lastIndex = 0;
+      let match;
+      const mentionedNames = new Set<string>();
+
+      // Extract all mentioned names in O(1) time relative to number of NPCs (depends on string length)
+      while ((match = masterRegex.exec(actA)) !== null) {
+        mentionedNames.add(match[1].toLowerCase());
+
+        // Advance lastIndex safely
+        if (match.index === masterRegex.lastIndex) {
+          masterRegex.lastIndex++;
+        }
+      }
+
+      for (const mentionedName of mentionedNames) {
+        if (mentionedName === normalizedNpcAName) continue;
+
+        const dataB = npcMap.get(mentionedName);
+        if (dataB) {
           const locB = dataB.loc;
-
           const isLocationCompatible =
             locA === locB || locA === "unknown" || locB === "unknown" || !locA || !locB;
 
