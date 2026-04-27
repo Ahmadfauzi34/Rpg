@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { TopologicalSyncSystem } from './topological-sync';
-import { NpcState } from '../game-state.service';
+import { TopologicalSyncSystem } from '../app/topology/topological-sync';
+import { NpcState } from '../app/game-state.service';
 
 describe('TopologicalSyncSystem', () => {
 
