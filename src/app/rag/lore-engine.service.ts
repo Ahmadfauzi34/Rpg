@@ -75,7 +75,6 @@ export class LoreEngineService {
     for (const [k, id] of this.docIdMap) {
       if (id === victim) {
         this.docIdMap.delete(k);
-        break;
       }
     }
 
@@ -531,6 +530,10 @@ export class LoreEngineService {
     if (numericId !== undefined) {
       const vec = this._textToVector(content, this.dim);
       const dOff = numericId * this.dim;
+      // Map both document key AND chunk IDs to numeric ID for CSR lookup
+      for (const chunk of chunks) {
+        this.docIdMap.set(chunk.id, numericId);
+      }
       for (let i = 0; i < this.dim; i++) {
         this.docFHRR[dOff + i] = vec[i]!;
       }
@@ -570,10 +573,12 @@ export class LoreEngineService {
       pos += size - overlap, idx++
     ) {
       const t = text.slice(pos, Math.min(pos + size, text.length));
+      const words = t.toLowerCase().match(/\b\w+\b/g) || [];
       out.push({
         id: `${docId}_c${idx}`,
         docId,
         text: t,
+        tokenCount: words.length,
         termFreq: this._tf(t),
         modifiedAt: Date.now(),
       });

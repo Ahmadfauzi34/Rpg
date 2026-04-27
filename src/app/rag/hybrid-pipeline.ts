@@ -250,7 +250,10 @@ export class RetrievalPipeline {
       let pivotPos = -1;
       for (let i = 0; i < nq; i++) {
         const t = qTerms[wandOrder[i]!]!;
-        if (t < 0 || t >= this.numTerms) continue;
+        if (t < 0 || t >= this.numTerms) {
+          // Invalid term contributes 0 to upper bound
+          continue;
+        }
         sumUB += termUB[t]! * qIDF[wandOrder[i]!]!;
         if (sumUB > threshold) {
           pivotPos = i;
@@ -275,7 +278,10 @@ export class RetrievalPipeline {
         let score = 0;
         for (let i = 0; i < nq; i++) {
           const t = qTerms[i]!;
-          if (t < 0 || t >= this.numTerms) continue;
+          if (t < 0 || t >= this.numTerms) {
+            wandDocIDs[i] = 2147483647; // Mark as exhausted
+            continue;
+          }
           const end = invLists.rowPtr[t + 1]!;
           let p = wandCursors[i]!;
           for (; p < end && invLists.colIdx[p]! < pivotDoc; p++) {
@@ -304,11 +310,17 @@ export class RetrievalPipeline {
       } else {
         const skipTerm = wandOrder[0]!;
         const t = qTerms[skipTerm]!;
-        const end = invLists.rowPtr[t + 1]!;
-        let p = wandCursors[skipTerm]!;
-        while (p < end && invLists.colIdx[p]! < pivotDoc) p++;
-        wandCursors[skipTerm] = p;
-        wandDocIDs[skipTerm] = p < end ? invLists.colIdx[p]! : 2147483647;
+        if (t < 0 || t >= this.numTerms) {
+          // Invalid term: mark as exhausted to prevent infinite loop
+          wandCursors[skipTerm] = 0;
+          wandDocIDs[skipTerm] = 2147483647;
+        } else {
+          const end = invLists.rowPtr[t + 1]!;
+          let p = wandCursors[skipTerm]!;
+          while (p < end && invLists.colIdx[p]! < pivotDoc) p++;
+          wandCursors[skipTerm] = p;
+          wandDocIDs[skipTerm] = p < end ? invLists.colIdx[p]! : 2147483647;
+        }
       }
 
       let allDone = true;
