@@ -18,3 +18,8 @@
 3. String Hash: `_textToVector` is now completely deterministic using a standard FNV-1a inspired hash technique per character.
 4. Correct Token Tracking: BM25 score normalization now utilizes accurate token length limits rather than scaled Term Frequency values.
 **Consequences:** The RAG system will confidently output deterministically correct chunks, while remaining performant and leak-free.
+
+## 2026-04-27 - [⬡ Carbo] - [True O(N) Topological Sync via Single-Pass Regex]
+**Context:** Bolt ⚡ highlighted that the previous topological sync still suffered from O(N^2) inner loops and dynamic inner regex tests.
+**Decision:** Fully eliminated the N^2 relational loops. Replaced with an O(1) Map lookup for NPCs and a globally compiled Regex mapping to extract all mentioned entity names from an activity string in a single linear pass `while(masterRegex.exec())`.
+**Consequences:** Topological sync is now mathematically O(N * length of activity), completely unblocking large populations (N>100) from crippling the CPU frame budget. Memory footprint is marginal (a hash map + regex).
